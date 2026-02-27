@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Banking Dashboard</title>
+
+<style>
+:root{
+--primary:#1e3c72;
+--secondary:#2a5298;
+--success:#28a745;
+--danger:#dc3545;
+--light:#f4f6f9;
+--dark:#1a1a1a;
+}
+
+body{
+margin:0;
+font-family:Arial, sans-serif;
+background:linear-gradient(to right,var(--primary),var(--secondary));
+color:#333;
+transition:0.3s;
+}
+
+.dark{
+background:#121212;
+color:white;
+}
+
+.container{
+max-width:1100px;
+margin:auto;
+padding:20px;
+}
+
+.card{
+background:white;
+padding:20px;
+border-radius:10px;
+margin-bottom:20px;
+box-shadow:0 5px 15px rgba(0,0,0,0.1);
+transition:0.3s;
+}
+
+.dark .card{
+background:#1e1e1e;
+color:white;
+}
+
+button{
+padding:8px 15px;
+border:none;
+border-radius:5px;
+cursor:pointer;
+margin:5px;
+}
+
+.btn-primary{background:var(--secondary);color:white;}
+.btn-success{background:var(--success);color:white;}
+.btn-danger{background:var(--danger);color:white;}
+
+input{
+padding:8px;
+margin:5px;
+width:95%;
+border-radius:5px;
+border:1px solid #ccc;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:10px;
+}
+
+th,td{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}
+
+#dashboard,#adminPanel{display:none;}
+
+.toast{
+position:fixed;
+bottom:20px;
+right:20px;
+background:#333;
+color:white;
+padding:10px 20px;
+border-radius:5px;
+display:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>🏦 Smart Banking System</h2>
+<button onclick="toggleDark()" class="btn-primary">🌙 Dark Mode</button>
+
+<!-- LOGIN -->
+<div class="card" id="loginSection">
+<h3>Login</h3>
+<input id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<button onclick="login()" class="btn-primary">Login</button>
+
+<h4>Register</h4>
+<input id="newUser" placeholder="New Username">
+<input type="password" id="newPass" placeholder="New Password">
+<button onclick="register()" class="btn-success">Create Account</button>
+</div>
+
+<!-- USER DASHBOARD -->
+<div id="dashboard">
+
+<div class="card">
+<h3>Welcome <span id="userDisplay"></span></h3>
+<p>Account No: <span id="accNo"></span></p>
+<h2>Balance: ₹ <span id="balance"></span></h2>
+</div>
+
+<div class="card">
+<h3>Deposit / Withdraw</h3>
+<input type="number" id="amount" placeholder="Amount">
+<button onclick="deposit()" class="btn-success">Deposit</button>
+<button onclick="withdraw()" class="btn-danger">Withdraw</button>
+</div>
+
+<div class="card">
+<h3>Transfer Money</h3>
+<input id="transferAcc" placeholder="Receiver Account No">
+<input type="number" id="transferAmt" placeholder="Amount">
+<button onclick="transfer()" class="btn-primary">Transfer</button>
+</div>
+
+<div class="card">
+<h3>Transaction History</h3>
+<table>
+<thead>
+<tr><th>ID</th><th>Type</th><th>Amount</th><th>Date</th></tr>
+</thead>
+<tbody id="history"></tbody>
+</table>
+</div>
+
+<button onclick="logout()" class="btn-danger">Logout</button>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel">
+<div class="card">
+<h3>👨‍💼 Admin Control Panel</h3>
+<p>Total Users: <span id="totalUsers"></span></p>
+<p>Total Bank Balance: ₹ <span id="totalBalance"></span></p>
+<table>
+<thead>
+<tr><th>User</th><th>Account</th><th>Balance</th></tr>
+</thead>
+<tbody id="adminTable"></tbody>
+</table>
+<button onclick="logout()" class="btn-danger">Logout</button>
+</div>
+</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+
+// SHA-256 Encryption
+async function hash(text){
+let buffer=new TextEncoder().encode(text);
+let hashBuffer=await crypto.subtle.digest("SHA-256",buffer);
+return Array.from(new Uint8Array(hashBuffer))
+.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+let users=JSON.parse(localStorage.getItem("bankUsers"))||{};
+let currentUser=localStorage.getItem("loggedUser")||null;
+
+function save(){localStorage.setItem("bankUsers",JSON.stringify(users));}
+function toast(msg){
+let t=document.getElementById("toast");
+t.innerText=msg;
+t.style.display="block";
+setTimeout(()=>t.style.display="none",3000);
+}
+
+function generateAcc(){return "ACC"+Math.floor(100000+Math.random()*900000);}
+function generateTxn(){return "TXN"+Date.now();}
+
+// Register
+async function register(){
+let u=document.getElementById("newUser").value;
+let p=document.getElementById("newPass").value;
+if(users[u]) return toast("User exists");
+users[u]={password:await hash(p),balance:0,acc:generateAcc(),history:[]};
+save();
+toast("Account Created");
+}
+
+// Login
+async function login(){
+let u=document.getElementById("username").value;
+let p=await hash(document.getElementById("password").value);
+
+if(u==="admin" && p===await hash("admin123")){
+currentUser="admin";
+localStorage.setItem("loggedUser","admin");
+showAdmin();
+return;
+}
+
+if(users[u] && users[u].password===p){
+currentUser=u;
+localStorage.setItem("loggedUser",u);
+showDashboard();
+}else toast("Invalid Login");
+}
+
+// Show Dashboard
+function showDashboard(){
+document.getElementById("loginSection").style.display="none";
+document.getElementById("dashboard").style.display="block";
+document.getElementById("userDisplay").innerText=currentUser;
+document.getElementById("accNo").innerText=users[currentUser].acc;
+updateBalance();
+loadHistory();
+}
+
+// Deposit
+function deposit(){
+let amt=parseInt(document.getElementById("amount").value);
+if(!amt) return;
+users[currentUser].balance+=amt;
+addHistory("Deposit",amt);
+}
+
+// Withdraw
+function withdraw(){
+let amt=parseInt(document.getElementById("amount").value);
+if(amt>users[currentUser].balance) return toast("Insufficient Balance");
+users[currentUser].balance-=amt;
+addHistory("Withdraw",amt);
+}
+
+// Transfer
+function transfer(){
+let acc=document.getElementById("transferAcc").value;
+let amt=parseInt(document.getElementById("transferAmt").value);
+let receiver=Object.keys(users).find(u=>users[u].acc===acc);
+if(!receiver) return toast("Account Not Found");
+if(amt>users[currentUser].balance) return toast("Insufficient Balance");
+
+users[currentUser].balance-=amt;
+users[receiver].balance+=amt;
+
+addHistory("Transfer To "+receiver,amt);
+users[receiver].history.push({id:generateTxn(),type:"Received",amount:amt,date:new Date().toLocaleString()});
+save();
+toast("Transfer Successful");
+updateBalance();
+loadHistory();
+}
+
+function addHistory(type,amt){
+users[currentUser].history.push({
+id:generateTxn(),
+type:type,
+amount:amt,
+date:new Date().toLocaleString()
+});
+save();
+updateBalance();
+loadHistory();
+toast(type+" Successful");
+}
+
+function updateBalance(){
+document.getElementById("balance").innerText=users[currentUser].balance;
+}
+
+function loadHistory(){
+let table=document.getElementById("history");
+table.innerHTML="";
+users[currentUser].history.forEach(t=>{
+table.innerHTML+=`<tr>
+<td>${t.id}</td>
+<td>${t.type}</td>
+<td>₹${t.amount}</td>
+<td>${t.date}</td>
+</tr>`;
+});
+}
+
+// Admin Panel
+function showAdmin(){
+document.getElementById("loginSection").style.display="none";
+document.getElementById("adminPanel").style.display="block";
+
+let total=0;
+let table=document.getElementById("adminTable");
+table.innerHTML="";
+for(let u in users){
+total+=users[u].balance;
+table.innerHTML+=`<tr>
+<td>${u}</td>
+<td>${users[u].acc}</td>
+<td>₹${users[u].balance}</td>
+</tr>`;
+}
+document.getElementById("totalUsers").innerText=Object.keys(users).length;
+document.getElementById("totalBalance").innerText=total;
+}
+
+function logout(){
+localStorage.removeItem("loggedUser");
+location.reload();
+}
+
+function toggleDark(){
+document.body.classList.toggle("dark");
+}
+
+if(currentUser){
+if(currentUser==="admin") showAdmin();
+else showDashboard();
+}
+
+</script>
+</body>
+</html>
